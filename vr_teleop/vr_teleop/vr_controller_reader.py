@@ -16,11 +16,11 @@ from datetime import datetime
 
 @dataclass
 class RawControllerData:
-    """原始控制器数据 - VR世界坐标系"""
-    position: np.ndarray        # [x, y, z] 位置 (米) - VR世界坐标
-    quaternion: tuple           # (w, x, y, z) 四元数 - VR世界坐标
-    velocity: np.ndarray        # [vx, vy, vz] 线速度 (m/s) - VR世界坐标
-    angular_velocity: np.ndarray # [wx, wy, wz] 角速度 (rad/s) - VR世界坐标
+    """原始控制器数据 - 仅位姿和按钮"""
+    position: np.ndarray        # [x, y, z] 位置 (米)
+    quaternion: tuple           # (w, x, y, z) 四元数
+    velocity: np.ndarray        # [vx, vy, vz] 线速度 (m/s)
+    angular_velocity: np.ndarray # [wx, wy, wz] 角速度 (rad/s)
     trigger: float              # 扳机值 0-1
     grip: float                 # 握持键值 0-1
     thumbstick_x: float         # 摇杆X -1到1
@@ -30,9 +30,6 @@ class RawControllerData:
     menu_pressed: bool          # 菜单键是否按下
     is_connected: bool          # 设备是否连接
     is_valid: bool              # 位姿是否有效
-    # 手柄局部坐标系速度（用于遥操）
-    local_linear_velocity: Optional[np.ndarray] = None  # [vx, vy, vz] 手柄局部坐标系线速度
-    local_angular_velocity: Optional[np.ndarray] = None  # [wx, wy, wz] 手柄局部坐标系角速度
 
 
 class VRControllerReader:
@@ -103,9 +100,9 @@ class VRControllerReader:
             [matrix[1][0], matrix[1][1], matrix[1][2]],
             [matrix[2][0], matrix[2][1], matrix[2][2]]
         ])
-
+        
         trace = m[0, 0] + m[1, 1] + m[2, 2]
-
+        
         if trace > 0:
             s = 0.5 / np.sqrt(trace + 1.0)
             w = 0.25 / s
@@ -130,50 +127,8 @@ class VRControllerReader:
             x = (m[0, 2] + m[2, 0]) / s
             y = (m[1, 2] + m[2, 1]) / s
             z = 0.25 * s
-
+        
         return (w, x, y, z)
-
-    def _quaternion_to_matrix(self, quaternion: tuple) -> np.ndarray:
-        """将四元数 (w, x, y, z) 转换为3x3旋转矩阵"""
-        w, x, y, z = quaternion
-        return np.array([
-            [1 - 2*y*y - 2*z*z, 2*x*y - 2*z*w,     2*x*z + 2*y*w],
-            [2*x*y + 2*z*w,     1 - 2*x*x - 2*z*z, 2*y*z - 2*x*w],
-            [2*x*z - 2*y*w,     2*y*z + 2*x*w,     1 - 2*x*x - 2*y*y]
-        ])
-
-    def _world_to_local_velocity(self, world_velocity: np.ndarray,
-                                  rotation_matrix: np.ndarray) -> np.ndarray:
-        """
-        将VR世界坐标系的速度转换到手柄局部坐标系
-
-        Args:
-            world_velocity: 世界坐标系速度 [vx, vy, vz]
-            rotation_matrix: 手柄的3x3旋转矩阵
-
-        Returns:
-            手柄局部坐标系速度 [vx_local, vy_local, vz_local]
-        """
-        # 速度向量 = 旋转矩阵转置 × 世界速度向量
-        # R^T * v_world = v_local
-        local_velocity = rotation_matrix.T @ world_velocity
-        return local_velocity
-
-    def _world_to_local_angular_velocity(self, world_angular_velocity: np.ndarray,
-                                           rotation_matrix: np.ndarray) -> np.ndarray:
-        """
-        将VR世界坐标系的角速度转换到手柄局部坐标系
-
-        Args:
-            world_angular_velocity: 世界坐标系角速度 [wx, wy, wz]
-            rotation_matrix: 手柄的3x3旋转矩阵
-
-        Returns:
-            手柄局部坐标系角速度 [wx_local, wy_local, wz_local]
-        """
-        # 角速度向量 = 旋转矩阵转置 × 世界角速度向量
-        local_angular_velocity = rotation_matrix.T @ world_angular_velocity
-        return local_angular_velocity
 
     def _parse_controller_buttons(self, state) -> tuple:
         """解析控制器按钮状态"""
@@ -269,18 +224,6 @@ class VRControllerReader:
             trigger = grip = trackpad_x = trackpad_y = 0.0
             trigger_pressed = grip_pressed = menu_pressed = False
 
-        # 计算手柄局部坐标系的速度
-        # 从旋转矩阵中提取手柄的旋转 (3x3部分)
-        rotation_matrix = np.array([
-            [pose.mDeviceToAbsoluteTracking[0][0], pose.mDeviceToAbsoluteTracking[0][1], pose.mDeviceToAbsoluteTracking[0][2]],
-            [pose.mDeviceToAbsoluteTracking[1][0], pose.mDeviceToAbsoluteTracking[1][1], pose.mDeviceToAbsoluteTracking[1][2]],
-            [pose.mDeviceToAbsoluteTracking[2][0], pose.mDeviceToAbsoluteTracking[2][1], pose.mDeviceToAbsoluteTracking[2][2]]
-        ])
-
-        # 将世界坐标系速度转换到手柄局部坐标系: v_local = R_world^T * v_world
-        local_linear_velocity = rotation_matrix.T @ velocity
-        local_angular_velocity = rotation_matrix.T @ angular_velocity
-
         return RawControllerData(
             position=position,
             quaternion=quaternion,
@@ -294,9 +237,7 @@ class VRControllerReader:
             grip_pressed=grip_pressed,
             menu_pressed=menu_pressed,
             is_connected=is_connected,
-            is_valid=is_valid,
-            local_linear_velocity=local_linear_velocity,
-            local_angular_velocity=local_angular_velocity
+            is_valid=is_valid
         )
 
     def get_hmd_pose(self) -> Optional[tuple]:
