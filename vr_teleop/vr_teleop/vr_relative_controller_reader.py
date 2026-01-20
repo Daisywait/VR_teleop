@@ -544,10 +544,10 @@ def main():
 
     # 定义测试方向 (头显坐标系)
     directions = [
-        {'name': '前', 'axis': 'Z', 'sign': 1, 'description': '向头显前方移动手柄'},
-        {'name': '后', 'axis': 'Z', 'sign': -1, 'description': '向头显后方移动手柄'},
-        {'name': '左', 'axis': 'X', 'sign': 1, 'description': '向头显左边移动手柄'},
-        {'name': '右', 'axis': 'X', 'sign': -1, 'description': '向头显右边移动手柄'},
+        {'name': '前', 'axis': 'Z', 'sign': -1, 'description': '向头显前方移动手柄'},
+        {'name': '后', 'axis': 'Z', 'sign': 1, 'description': '向头显后方移动手柄'},
+        {'name': '左', 'axis': 'X', 'sign': -1, 'description': '向头显左边移动手柄'},
+        {'name': '右', 'axis': 'X', 'sign': 1, 'description': '向头显右边移动手柄'},
         {'name': '上', 'axis': 'Y', 'sign': 1, 'description': '向头显上方移动手柄'},
         {'name': '下', 'axis': 'Y', 'sign': -1, 'description': '向头显下方移动手柄'}
     ]
