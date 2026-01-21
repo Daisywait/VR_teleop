@@ -7,7 +7,7 @@ VR ROS2 Node
 - /vr/right_controller/pose_hmd (geometry_msgs/PoseStamped)
 - /vr/right_controller/trigger (std_msgs/Float32)
 - /vr/right_controller/joystick_y (std_msgs/Float32)
-- TF: vr_room -> vr_hmd -> vr_controller_right
+- TF: vr_room -> vr_hmd_ros -> vr_controller_right
 """
 
 import rclpy
@@ -101,7 +101,7 @@ class VRRos2Node(Node):
         update_rate: 更新频率 (Hz), 默认90
         publish_tf: 是否发布TF变换, 默认True
         frame_id: 基准坐标系名称, 默认'vr_room'
-        hmd_frame_id: 头显坐标系名称, 默认'vr_hmd'
+        hmd_frame_id: 头显坐标系名称, 默认'vr_hmd_ros'
     """
 
     def __init__(self):
@@ -111,7 +111,7 @@ class VRRos2Node(Node):
         self.declare_parameter('update_rate', 90.0)
         self.declare_parameter('publish_tf', True)
         self.declare_parameter('frame_id', 'vr_room')
-        self.declare_parameter('hmd_frame_id', 'vr_hmd')
+        self.declare_parameter('hmd_frame_id', 'vr_hmd_ros')
         self.declare_parameter('enable_right_controller', True)
 
         # 获取参数
@@ -120,6 +120,11 @@ class VRRos2Node(Node):
         self.frame_id = self.get_parameter('frame_id').value
         self.hmd_frame_id = self.get_parameter('hmd_frame_id').value
         self.enable_right = self.get_parameter('enable_right_controller').value
+        self.hmd_to_ros_rot = np.array([
+            [0.0, 0.0, -1.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0]
+        ], dtype=float)
 
         # QoS设置 - 低延迟配置
         qos_profile = QoSProfile(
@@ -330,6 +335,18 @@ class VRRos2Node(Node):
         ])
         return rotation_matrix_to_quaternion(m)
 
+    def _quat_wxyz_to_rotmat(self, q: tuple) -> np.ndarray:
+        """四元数(w,x,y,z)转旋转矩阵"""
+        w, x, y, z = q
+        xx, yy, zz = x * x, y * y, z * z
+        xy, xz, yz = x * y, x * z, y * z
+        wx, wy, wz = w * x, w * y, w * z
+        return np.array([
+            [1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy)],
+            [2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)],
+            [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)]
+        ], dtype=float)
+
     def _get_hmd_pose(self) -> Optional[tuple]:
         """获取头显位姿 (position, quaternion)"""
         poses = self._get_device_poses()
@@ -346,9 +363,20 @@ class VRRos2Node(Node):
         quaternion = self._openvr_matrix_to_quaternion(hmd_pose.mDeviceToAbsoluteTracking)
         return (position, quaternion)
 
+    def _map_pose_hmd_to_ros(self, pos_hmd: np.ndarray, quat_hmd: tuple) -> tuple:
+        """将HMD坐标系下的位姿转换为ROS坐标系表示"""
+        rot_hmd = self._quat_wxyz_to_rotmat(quat_hmd)
+        pos_ros = self.hmd_to_ros_rot @ pos_hmd
+        rot_ros = self.hmd_to_ros_rot @ rot_hmd @ self.hmd_to_ros_rot.T
+        quat_ros = rotation_matrix_to_quaternion(rot_ros)
+        return pos_ros, quat_ros
+
     def _publish_hmd_tf(self, hmd_pose: tuple) -> None:
-        """发布vr_room -> vr_hmd的TF"""
+        """发布vr_room -> vr_hmd_ros的TF"""
         position, quaternion = hmd_pose
+        rot_room_hmd = self._quat_wxyz_to_rotmat(quaternion)
+        rot_room_hmd_ros = rot_room_hmd @ self.hmd_to_ros_rot.T
+        quaternion = rotation_matrix_to_quaternion(rot_room_hmd_ros)
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = self.frame_id
@@ -363,7 +391,7 @@ class VRRos2Node(Node):
         self.tf_broadcaster.sendTransform(t)
 
     def _publish_controller_tf(self, rel_pos: np.ndarray, rel_quat: tuple) -> None:
-        """发布vr_hmd -> vr_controller_right的TF"""
+        """发布vr_hmd_ros -> vr_controller_right的TF"""
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = self.hmd_frame_id
@@ -442,7 +470,6 @@ class VRRos2Node(Node):
 
         try:
             right_data = None
-            left_data = None
             # 读取右手控制器
             if self.enable_right:
                 right_data = self._get_controller_data('right')
@@ -460,6 +487,7 @@ class VRRos2Node(Node):
                     ctrl_pose = (right_data.position,
                                  rotation_matrix_to_quaternion(right_data.rotation_matrix))
                     rel_pos, rel_quat = self._get_relative_pose(ctrl_pose, hmd_pose)
+                    rel_pos, rel_quat = self._map_pose_hmd_to_ros(rel_pos, rel_quat)
                     self.right_pose_hmd_pub.publish(
                         self._create_pose_msg_from_arrays_frame(
                             rel_pos, rel_quat, self.hmd_frame_id
@@ -467,15 +495,6 @@ class VRRos2Node(Node):
                     )
                     if self.publish_tf:
                         self._publish_controller_tf(rel_pos, rel_quat)
-                if self.enable_left and left_data:
-                    ctrl_pose = (left_data.position,
-                                 rotation_matrix_to_quaternion(left_data.rotation_matrix))
-                    rel_pos, rel_quat = self._get_relative_pose(ctrl_pose, hmd_pose)
-                    self.left_pose_hmd_pub.publish(
-                        self._create_pose_msg_from_arrays_frame(
-                            rel_pos, rel_quat, self.hmd_frame_id
-                        )
-                    )
 
         except Exception as e:
             self.get_logger().error(f'Error reading VR data: {e}')
