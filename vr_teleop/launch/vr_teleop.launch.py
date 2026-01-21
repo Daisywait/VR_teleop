@@ -25,16 +25,6 @@ def generate_launch_description():
             description='VR tracking update rate (Hz)'
         ),
         DeclareLaunchArgument(
-            'linear_speed_scale',
-            default_value='0.5',
-            description='Linear velocity scaling factor'
-        ),
-        DeclareLaunchArgument(
-            'angular_speed_scale',
-            default_value='0.5',
-            description='Angular velocity scaling factor'
-        ),
-        DeclareLaunchArgument(
             'publish_rate',
             default_value='50.0',
             description='Command publish rate for moveit_servo (Hz)'
@@ -71,8 +61,6 @@ def generate_launch_description():
         parameters=[
             config_file_path,
             {
-                'linear_speed_scale': LaunchConfiguration('linear_speed_scale'),
-                'angular_speed_scale': LaunchConfiguration('angular_speed_scale'),
                 'publish_rate': LaunchConfiguration('publish_rate')
             }
         ]
@@ -95,4 +83,3 @@ def generate_launch_description():
             LogInfo(msg='Waiting for VR connection and MoveIt Servo...'),
         ]
     )
-

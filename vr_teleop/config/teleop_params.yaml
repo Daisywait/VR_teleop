@@ -13,10 +13,12 @@ vr_tracker_node:
     publish_tf: true
 
     # VR原点坐标系名称
-    frame_id: "vr_origin"
+    frame_id: "vr_room"
 
-    # 启用的控制器
-    enable_left_controller: true
+    # HMD坐标系名称（相对位姿的参考坐标）
+    hmd_frame_id: "vr_hmd_ros"
+
+    # 启用右手控制器
     enable_right_controller: true
 
 # ============================================================
@@ -24,71 +26,33 @@ vr_tracker_node:
 # ============================================================
 franka_teleop_node:
   ros__parameters:
-    # ---------- 控制模式 ----------
-    # 'incremental': 增量模式 - VR位移映射到机器人位移 (推荐)
-    # 'absolute': 绝对模式 - VR位置直接映射到机器人位置
-    # 'velocity': 速度模式 - VR速度映射到机器人速度
-    control_mode: "incremental"
-
-    # ---------- 缩放因子 ----------
-    # 位置缩放: 1.0 = 1:1映射, 0.5 = VR移动1m机器人移动0.5m
-    position_scale: 1.0
-
-    # 旋转缩放
-    rotation_scale: 1.0
-
-    # 控制频率 (Hz)
-    update_rate: 100.0
-
-    # ---------- 安全限制 ----------
-    # 最大线速度 (m/s) - 建议初期设置较低值
-    max_linear_velocity: 0.1
-
-    # 最大角速度 (rad/s)
-    max_angular_velocity: 0.5
-
-    # 最大线加速度 (m/s^2)
-    max_linear_acceleration: 0.5
-
-    # 扳机激活阈值 (0-1)
+    # ---------- 控制参数 ----------
+    linear_scale: 2.1
+    angular_scale: 0.4
+    v_max: 0.15
+    w_max: 1.0
+    smoothing_factor: 0.3
+    deadzone_linear: 0.002
+    deadzone_angular: 0.03
     trigger_threshold: 0.5
 
-    # ---------- 工作空间限制 (米) ----------
-    # Franka FR3 工作空间 (根据实际环境调整)
-    workspace:
-      x_min: 0.2    # 机器人前方最近距离
-      x_max: 0.7    # 机器人前方最远距离
-      y_min: -0.4   # 左侧
-      y_max: 0.4    # 右侧
-      z_min: 0.05   # 最低高度 (避免碰撞桌面)
-      z_max: 0.6    # 最高高度
+    # ---------- 参考坐标系 ----------
+    planning_frame: "fr3_link0"
 
-    # ---------- Home位置 ----------
-    # 机器人初始/默认末端位置 (米)
-    home_position: [0.4, 0.0, 0.3]
-
-    # 机器人初始/默认末端姿态 (四元数 w,x,y,z)
-    # 末端朝下的姿态
-    home_orientation: [0.0, 1.0, 0.0, 0.0]
+    # ---------- 发布频率 ----------
+    publish_rate: 50.0
 
     # ---------- 坐标系变换 ----------
     # VR到机器人坐标系的旋转 (roll, pitch, yaw in degrees)
-    # 根据您的VR设置和机器人朝向调整
     vr_to_robot_rotation: [0.0, 0.0, -90.0]
 
-# ============================================================
-# 夹爪配置
-# ============================================================
-gripper:
-  ros__parameters:
-    # 夹爪完全打开宽度 (米)
-    max_width: 0.08
+    # ---------- Servo话题 ----------
+    twist_topic: "/moveit_servo/delta_twist_cmds"
 
-    # 夹爪完全关闭宽度 (米)
-    min_width: 0.0
-
-    # 夹爪力 (牛顿)
-    grip_force: 20.0
-
-    # 夹爪速度 (米/秒)
-    grip_speed: 0.1
+    # ---------- 夹爪配置 ----------
+    gripper_action: "/robotiq_gripper_controller/gripper_cmd"
+    gripper_open_pos: 0.08
+    gripper_close_pos: 0.0
+    gripper_force: 20.0
+    gripper_speed: 0.1
+    gripper_rate: 15.0
