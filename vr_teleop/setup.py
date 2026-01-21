@@ -32,6 +32,7 @@ setup(
             'vr_converter_node = vr_teleop.franka_teleop_node:main',
             'vr_debug = vr_teleop.vr_controller_reader:main',
             'vr_relative_debug = vr_teleop.vr_relative_controller_reader:main',
+            'vr_monitor_node = vr_teleop.vr_monitor_node:main',
         ],
     },
 )
