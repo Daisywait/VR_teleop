@@ -9,7 +9,7 @@ VR to MoveIt Servo Node (HMD-relative)
 - /vr/right_controller/joystick_y (std_msgs/Float32) - 右手摇杆Y轴
 
 发布:
-- /servo_node/delta_twist_cmds (geometry_msgs/TwistStamped) - 末端速度命令
+- /moveit_servo/delta_twist_cmds (geometry_msgs/TwistStamped) - 末端速度命令
 """
 
 import rclpy
