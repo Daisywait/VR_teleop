@@ -113,6 +113,9 @@ class VRRos2Node(Node):
         self.declare_parameter('frame_id', 'vr_room')
         self.declare_parameter('hmd_frame_id', 'vr_hmd_ros')
         self.declare_parameter('enable_right_controller', True)
+        self.declare_parameter('haptic_on_trigger', True)
+        self.declare_parameter('haptic_duration_us', 3000)
+        self.declare_parameter('reinit_interval', 5.0)
 
         # 获取参数
         self.update_rate = self.get_parameter('update_rate').value
@@ -120,6 +123,10 @@ class VRRos2Node(Node):
         self.frame_id = self.get_parameter('frame_id').value
         self.hmd_frame_id = self.get_parameter('hmd_frame_id').value
         self.enable_right = self.get_parameter('enable_right_controller').value
+        self.haptic_on_trigger = self.get_parameter('haptic_on_trigger').value
+        self.haptic_duration_us = int(self.get_parameter('haptic_duration_us').value)
+        self.last_trigger_pressed = False
+        self.reinit_interval = float(self.get_parameter('reinit_interval').value)
         self.hmd_to_ros_rot = np.array([
             [0.0, 0.0, -1.0],
             [-1.0, 0.0, 0.0],
@@ -148,6 +155,7 @@ class VRRos2Node(Node):
 
         # 初始化VR系统
         self.vr_system = None
+        self.last_init_attempt = 0.0
         self._controller_indices: Dict[str, Optional[int]] = {}
         self._init_vr()
 
@@ -160,7 +168,8 @@ class VRRos2Node(Node):
     def _init_vr(self) -> bool:
         """初始化VR系统"""
         try:
-            self.vr_system = openvr.init(openvr.VRApplication_Other)
+            # Use background app type to reduce interference with VR runtime
+            self.vr_system = openvr.init(openvr.VRApplication_Background)
             self._update_controller_indices()
             self.get_logger().info('VR system initialized successfully')
             return True
@@ -461,10 +470,30 @@ class VRRos2Node(Node):
             joystick_msg.data = data.state.joystick_y
             self.right_joystick_y_pub.publish(joystick_msg)
 
+            if self.haptic_on_trigger:
+                self._maybe_trigger_haptic(data.state.trigger_pressed, hand)
+
+    def _maybe_trigger_haptic(self, trigger_pressed: bool, hand: str) -> None:
+        """扳机按下时触发手柄震动"""
+        if hand != 'right':
+            return
+
+        if trigger_pressed and not self.last_trigger_pressed:
+            device_index = self._controller_indices.get('right')
+            if device_index is not None:
+                duration = max(0, min(self.haptic_duration_us, 3999))
+                self.vr_system.triggerHapticPulse(device_index, 0, duration)
+
+        self.last_trigger_pressed = trigger_pressed
+
     def timer_callback(self) -> None:
         """定时器回调 - 读取并发布VR数据"""
         if self.vr_system is None:
             # 尝试重新初始化
+            now = self.get_clock().now().nanoseconds * 1e-9
+            if (now - self.last_init_attempt) < self.reinit_interval:
+                return
+            self.last_init_attempt = now
             if not self._init_vr():
                 return
 

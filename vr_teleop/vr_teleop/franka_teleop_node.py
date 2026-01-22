@@ -9,7 +9,7 @@ VR to MoveIt Servo Node (HMD-relative)
 - /vr/right_controller/joystick_y (std_msgs/Float32) - 右手摇杆Y轴
 
 发布:
-- /moveit_servo/delta_twist_cmds (geometry_msgs/TwistStamped) - 末端速度命令
+- twist_topic 参数指定的话题 (geometry_msgs/TwistStamped) - 末端速度命令
 """
 
 import rclpy
@@ -19,6 +19,9 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
 from std_msgs.msg import Float32
 from control_msgs.action import GripperCommand
+from std_srvs.srv import Trigger
+import tf2_ros
+from tf2_ros import TransformException
 import numpy as np
 from typing import Optional
 
@@ -69,6 +72,54 @@ def _rpy_deg_to_rotmat(rpy_deg: np.ndarray) -> np.ndarray:
     return rz @ ry @ rx
 
 
+def _quat_to_rotmat_xyzw(q: np.ndarray) -> np.ndarray:
+    x, y, z, w = q
+    xx, yy, zz = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
+    return np.array([
+        [1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy)],
+        [2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)],
+        [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)]
+    ], dtype=float)
+
+
+def _rotvec_to_quat_xyzw(rotvec: np.ndarray) -> np.ndarray:
+    angle = float(np.linalg.norm(rotvec))
+    if angle < 1e-9:
+        return np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+    axis = rotvec / angle
+    half = 0.5 * angle
+    s = np.sin(half)
+    return np.array([axis[0] * s, axis[1] * s, axis[2] * s, np.cos(half)], dtype=float)
+
+
+def _pose_compose(p1: np.ndarray, q1: np.ndarray, p2: np.ndarray, q2: np.ndarray) -> tuple:
+    q1 = _quat_normalize_xyzw(q1)
+    q2 = _quat_normalize_xyzw(q2)
+    r1 = _quat_to_rotmat_xyzw(q1)
+    p = p1 + r1 @ p2
+    q = _quat_mul_xyzw(q1, q2)
+    q = _quat_normalize_xyzw(q)
+    return p, q
+
+
+def _pose_inverse(p: np.ndarray, q: np.ndarray) -> tuple:
+    q = _quat_normalize_xyzw(q)
+    q_i = _quat_inv_xyzw(q)
+    r_i = _quat_to_rotmat_xyzw(q_i)
+    p_i = -r_i @ p
+    return p_i, q_i
+
+
+def _pose_error(p_cur: np.ndarray, q_cur: np.ndarray,
+                p_des: np.ndarray, q_des: np.ndarray) -> tuple:
+    p_ci, q_ci = _pose_inverse(p_cur, q_cur)
+    p_err, q_err = _pose_compose(p_ci, q_ci, p_des, q_des)
+    rotvec = _quat_to_rotvec_xyzw(q_err)
+    return p_err, rotvec
+
+
 class VRMessageConverterNode(Node):
     """
     VR到ROS2消息转换节点
@@ -89,14 +140,17 @@ class VRMessageConverterNode(Node):
         self.declare_parameter('deadzone_angular', 0.03)  # 角速度死区 rad
         self.declare_parameter('trigger_threshold', 0.5)  # 触发阈值
         self.declare_parameter('planning_frame', 'fr3_link0')  # 参考坐标系
+        self.declare_parameter('ee_frame', 'robotiq_85_base_link')
         self.declare_parameter('publish_rate', 50.0)      # 发布频率 Hz
         self.declare_parameter('vr_to_robot_rotation', [0.0, 0.0, -90.0])  # rpy deg
-        self.declare_parameter('twist_topic', '/servo_node/delta_twist_cmds')
+        self.declare_parameter('twist_topic', '/moveit_servo/delta_twist_cmds')
         self.declare_parameter('gripper_action', '/robotiq_gripper_controller/gripper_cmd')
-        self.declare_parameter('gripper_open_pos', 0.08)
-        self.declare_parameter('gripper_close_pos', 0.0)
-        self.declare_parameter('gripper_force', 20.0)
-        self.declare_parameter('gripper_speed', 0.1)
+        self.declare_parameter('gripper_open_pos', 0.0)
+        self.declare_parameter('gripper_close_pos', 0.8)
+        self.declare_parameter('gripper_force', 50.0)
+        self.declare_parameter('gripper_speed', 0.8)
+        self.declare_parameter('gripper_axis_deadzone', 0.08)
+        self.declare_parameter('gripper_deadband', 0.01)
         self.declare_parameter('gripper_rate', 15.0)
 
         # ========== 获取参数 ==========
@@ -109,6 +163,7 @@ class VRMessageConverterNode(Node):
         self.deadzone_angular = float(self.get_parameter('deadzone_angular').value)
         self.trigger_threshold = self.get_parameter('trigger_threshold').value
         self.reference_frame = self.get_parameter('planning_frame').value
+        self.ee_frame = self.get_parameter('ee_frame').value
         self.publish_rate = self.get_parameter('publish_rate').value
         self.twist_topic = self.get_parameter('twist_topic').value
         self.gripper_action = self.get_parameter('gripper_action').value
@@ -116,46 +171,63 @@ class VRMessageConverterNode(Node):
         self.gripper_close_pos = float(self.get_parameter('gripper_close_pos').value)
         self.gripper_force = float(self.get_parameter('gripper_force').value)
         self.gripper_speed = float(self.get_parameter('gripper_speed').value)
+        self.gripper_axis_deadzone = float(self.get_parameter('gripper_axis_deadzone').value)
+        self.gripper_deadband = float(self.get_parameter('gripper_deadband').value)
         self.gripper_rate = float(self.get_parameter('gripper_rate').value)
 
         rpy_deg = np.array(self.get_parameter('vr_to_robot_rotation').value, dtype=float)
         self.vr_to_robot_rot = _rpy_deg_to_rotmat(rpy_deg)
 
         # ========== QoS配置 ==========
-        qos = QoSProfile(
+        qos_sub = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
+        )
+        qos_pub = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
         )
 
         # ========== 订阅VR数据 ==========
         self.create_subscription(
             PoseStamped, '/vr/right_controller/pose_hmd',
-            self._controller_pose_callback, qos)
+            self._controller_pose_callback, qos_sub)
 
         self.create_subscription(
             Float32, '/vr/right_controller/trigger',
-            self._trigger_callback, qos)
+            self._trigger_callback, qos_sub)
 
         self.create_subscription(
             Float32, '/vr/right_controller/joystick_y',
-            self._joystick_callback, qos)
+            self._joystick_callback, qos_sub)
 
         # ========== 发布ROS2消息给moveit_servo ==========
         self.twist_pub = self.create_publisher(
-            TwistStamped, self.twist_topic, qos)
+            TwistStamped, self.twist_topic, qos_pub)
 
         # 夹爪 Action
         self.gripper_client = ActionClient(
             self, GripperCommand, self.gripper_action)
 
+        # TF
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+
+        # Servo 激活客户端
+        self.servo_start_client = self.create_client(Trigger, '/moveit_servo/start_servo')
+        self.servo_start_timer = self.create_timer(1.0, self.try_activate_servo)
+
         # ========== 状态变量 ==========
         self.current_controller_pose: Optional[PoseStamped] = None
         self.trigger_value = 0.0
         self.enabled = False
-        self.last_rel_position: Optional[np.ndarray] = None
-        self.last_rel_quaternion: Optional[np.ndarray] = None
-        self.last_time = self.get_clock().now()
+        self.anchor_set = False
+        self.ee_anchor_p: Optional[np.ndarray] = None
+        self.ee_anchor_q: Optional[np.ndarray] = None
+        self.vr_anchor_p: Optional[np.ndarray] = None
+        self.vr_anchor_q: Optional[np.ndarray] = None
         self.target_twist = TwistStamped()
         self.joystick_y = 0.0
         self.gripper_target_pos = self.gripper_open_pos
@@ -179,6 +251,12 @@ class VRMessageConverterNode(Node):
         self.get_logger().info('='*60)
         self.get_logger().info('Waiting for VR controller data...')
 
+    def try_activate_servo(self) -> None:
+        """尝试启动 MoveIt Servo（避免未激活导致无动作）"""
+        if self.servo_start_client.wait_for_service(timeout_sec=0.1):
+            self.servo_start_client.call_async(Trigger.Request())
+            self.servo_start_timer.cancel()
+
     def _controller_pose_callback(self, msg: PoseStamped) -> None:
         """接收VR控制器相对头显位姿"""
         self.current_controller_pose = msg
@@ -193,8 +271,7 @@ class VRMessageConverterNode(Node):
         
         if self.enabled and not old_enabled:
             self.get_logger().info('✓ VR Control ENABLED')
-            self.last_rel_position = None
-            self.last_rel_quaternion = None
+            self.anchor_set = False
         elif not self.enabled and old_enabled:
             self.get_logger().info('✗ VR Control DISABLED')
 
@@ -202,36 +279,71 @@ class VRMessageConverterNode(Node):
         """接收右手摇杆Y轴"""
         self.joystick_y = float(msg.data)
 
+    def _get_current_ee_pose(self) -> tuple:
+        """获取当前末端位姿"""
+        try:
+            trans = self.tf_buffer.lookup_transform(
+                self.reference_frame, self.ee_frame, rclpy.time.Time())
+            p = np.array([
+                trans.transform.translation.x,
+                trans.transform.translation.y,
+                trans.transform.translation.z
+            ], dtype=float)
+            q = np.array([
+                trans.transform.rotation.x,
+                trans.transform.rotation.y,
+                trans.transform.rotation.z,
+                trans.transform.rotation.w
+            ], dtype=float)
+            q = _quat_normalize_xyzw(q)
+            return p, q
+        except TransformException as exc:
+            self.get_logger().warn(
+                f'TF lookup failed ({self.reference_frame} -> {self.ee_frame}): {exc}')
+            return None, None
+
     def _calculate_velocity(self) -> Optional[Twist]:
-        """根据VR手柄相对头显位姿变化计算速度命令"""
+        """基于锚点的VR相对位姿 -> 末端位姿误差 -> 速度命令"""
         if self.current_controller_pose is None:
             return None
-        rel_pos = np.array([
+
+        ee_p, ee_q = self._get_current_ee_pose()
+        if ee_p is None:
+            return None
+
+        vr_p_now = np.array([
             self.current_controller_pose.pose.position.x,
             self.current_controller_pose.pose.position.y,
             self.current_controller_pose.pose.position.z
         ], dtype=float)
-        rel_quat = _quat_normalize_xyzw(np.array([
+        vr_q_now = _quat_normalize_xyzw(np.array([
             self.current_controller_pose.pose.orientation.x,
             self.current_controller_pose.pose.orientation.y,
             self.current_controller_pose.pose.orientation.z,
             self.current_controller_pose.pose.orientation.w
         ], dtype=float))
-        now = self.get_clock().now()
-        dt = (now - self.last_time).nanoseconds * 1e-9
 
-        if dt <= 0.0 or self.last_rel_position is None or self.last_rel_quaternion is None:
-            self.last_rel_position = rel_pos
-            self.last_rel_quaternion = rel_quat
-            self.last_time = now
+        if not self.anchor_set:
+            self.ee_anchor_p = ee_p.copy()
+            self.ee_anchor_q = ee_q.copy()
+            self.vr_anchor_p = vr_p_now.copy()
+            self.vr_anchor_q = vr_q_now.copy()
+            self.anchor_set = True
             return Twist()
 
-        dp = rel_pos - self.last_rel_position
-        q_delta = _quat_mul_xyzw(_quat_inv_xyzw(self.last_rel_quaternion), rel_quat)
-        rotvec = _quat_to_rotvec_xyzw(q_delta)
+        vr_anchor_pi, vr_anchor_qi = _pose_inverse(self.vr_anchor_p, self.vr_anchor_q)
+        dvr_p, dvr_q = _pose_compose(vr_anchor_pi, vr_anchor_qi, vr_p_now, vr_q_now)
 
-        linear_vel = dp / dt * self.linear_scale
-        angular_vel = rotvec / dt * self.angular_scale
+        dp_robot = self.vr_to_robot_rot @ dvr_p
+        rotvec_raw = _quat_to_rotvec_xyzw(dvr_q)
+        rotvec_robot = self.vr_to_robot_rot @ rotvec_raw
+        dq_robot = _rotvec_to_quat_xyzw(rotvec_robot)
+
+        p_des, q_des = _pose_compose(self.ee_anchor_p, self.ee_anchor_q, dp_robot, dq_robot)
+        pos_err, rotvec_err = _pose_error(ee_p, ee_q, p_des, q_des)
+
+        linear_vel = pos_err * self.linear_scale
+        angular_vel = rotvec_err * self.angular_scale
 
         # 线速度死区
         if np.linalg.norm(linear_vel) < self.deadzone_linear:
@@ -239,10 +351,6 @@ class VRMessageConverterNode(Node):
         # 角速度死区
         if np.linalg.norm(angular_vel) < self.deadzone_angular:
             angular_vel[:] = 0.0
-
-        # 映射到机器人坐标系
-        linear_vel = self.vr_to_robot_rot @ linear_vel
-        angular_vel = self.vr_to_robot_rot @ angular_vel
 
         # 速度限制
         linear_mag = np.linalg.norm(linear_vel)
@@ -252,11 +360,6 @@ class VRMessageConverterNode(Node):
         angular_mag = np.linalg.norm(angular_vel)
         if angular_mag > self.max_angular_vel:
             angular_vel = angular_vel / angular_mag * self.max_angular_vel
-
-        # 更新状态
-        self.last_rel_position = rel_pos
-        self.last_rel_quaternion = rel_quat
-        self.last_time = now
 
         # 创建Twist消息
         twist = Twist()
@@ -279,6 +382,7 @@ class VRMessageConverterNode(Node):
             twist_msg.header.stamp = self.get_clock().now().to_msg()
             twist_msg.header.frame_id = self.reference_frame
             self.twist_pub.publish(twist_msg)
+            self.anchor_set = False
             return
 
         # 计算速度
@@ -319,9 +423,12 @@ class VRMessageConverterNode(Node):
         if not self.gripper_client.wait_for_server(timeout_sec=0.05):
             return
 
+        axis = float(self.joystick_y)
+        if abs(axis) < self.gripper_axis_deadzone:
+            axis = 0.0
+
         dt = 1.0 / self.gripper_rate
-        direction = np.sign(self.gripper_close_pos - self.gripper_open_pos)
-        delta = float(self.joystick_y) * self.gripper_speed * dt * direction
+        delta = axis * self.gripper_speed * dt * (self.gripper_close_pos - self.gripper_open_pos)
         self.gripper_target_pos += delta
         self.gripper_target_pos = float(
             np.clip(self.gripper_target_pos,
@@ -330,7 +437,7 @@ class VRMessageConverterNode(Node):
         )
 
         if self.last_gripper_pos_sent is not None:
-            if abs(self.gripper_target_pos - self.last_gripper_pos_sent) < 1e-4:
+            if abs(self.gripper_target_pos - self.last_gripper_pos_sent) < self.gripper_deadband:
                 return
 
         goal = GripperCommand.Goal()

@@ -5,10 +5,10 @@ VR to MoveIt Servo Launch File
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, LogInfo
+from launch.actions import DeclareLaunchArgument, GroupAction, LogInfo, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
+import yaml
 
 
 def generate_launch_description():
@@ -16,8 +16,8 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument(
             'config_file',
-            default_value='teleop_params.yaml',
-            description='Name of the configuration file'
+            default_value=PathJoinSubstitution(['src', 'vr_teleop', 'config', 'teleop_params.yaml']),
+            description='Path to the configuration file'
         ),
         DeclareLaunchArgument(
             'update_rate',
@@ -33,8 +33,6 @@ def generate_launch_description():
 
     # ========== 配置文件路径 ==========
     config_file_path = PathJoinSubstitution([
-        FindPackageShare('vr_teleop'),
-        'config',
         LaunchConfiguration('config_file')
     ])
 
@@ -66,6 +64,42 @@ def generate_launch_description():
         ]
     )
 
+    def _make_gripper_tcp_tf(context):
+        config_path = LaunchConfiguration('config_file').perform(context)
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f) or {}
+        except FileNotFoundError:
+            data = {}
+
+        params = (
+            data.get('vr_converter_node', {})
+            .get('ros__parameters', {})
+        )
+        xyz = params.get('gripper_tcp_xyz', [0.0, 0.0, 0.0])
+        rpy = params.get('gripper_tcp_rpy', [0.0, 0.0, 0.0])
+        xyz = [float(v) for v in (xyz + [0.0, 0.0, 0.0])[:3]]
+        rpy = [float(v) for v in (rpy + [0.0, 0.0, 0.0])[:3]]
+
+        return [
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name='gripper_tcp_static_tf',
+                output='screen',
+                arguments=[
+                    '--frame-id', 'robotiq_85_base_link',
+                    '--child-frame-id', 'robotiq_85_tcp',
+                    '--x', str(xyz[0]),
+                    '--y', str(xyz[1]),
+                    '--z', str(xyz[2]),
+                    '--roll', str(rpy[0]),
+                    '--pitch', str(rpy[1]),
+                    '--yaw', str(rpy[2]),
+                ],
+            )
+        ]
+
     # ========== 启动描述 ==========
     return LaunchDescription(
         declared_arguments + [
@@ -77,6 +111,7 @@ def generate_launch_description():
             GroupAction([
                 vr_tracker_node,
                 vr_converter_node,
+                OpaqueFunction(function=_make_gripper_tcp_tf),
             ]),
 
             LogInfo(msg='VR tracking and servo conversion nodes launched.'),

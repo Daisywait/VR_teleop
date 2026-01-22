@@ -24,13 +24,13 @@ vr_tracker_node:
 # ============================================================
 # Franka Teleop Node 配置
 # ============================================================
-franka_teleop_node:
+vr_converter_node:
   ros__parameters:
     # ---------- 控制参数 ----------
-    linear_scale: 2.1
-    angular_scale: 0.4
-    v_max: 0.15
-    w_max: 1.0
+    linear_scale: 12.0
+    angular_scale: 1.2
+    v_max: 0.12
+    w_max: 0.8
     smoothing_factor: 0.3
     deadzone_linear: 0.002
     deadzone_angular: 0.03
@@ -38,21 +38,28 @@ franka_teleop_node:
 
     # ---------- 参考坐标系 ----------
     planning_frame: "fr3_link0"
+    ee_frame: "robotiq_85_tcp"
 
     # ---------- 发布频率 ----------
     publish_rate: 50.0
 
     # ---------- 坐标系变换 ----------
     # VR到机器人坐标系的旋转 (roll, pitch, yaw in degrees)
-    vr_to_robot_rotation: [0.0, 0.0, -90.0]
+    vr_to_robot_rotation: [0.0, 0.0, 0.0]
+
+    # 夹爪TCP相对 base_link 的静态偏移 (xyz, rpy in meters/degrees)
+    gripper_tcp_xyz: [0.0, 0.0, 0.0]
+    gripper_tcp_rpy: [0.0, 0.0, 0.0]
 
     # ---------- Servo话题 ----------
     twist_topic: "/moveit_servo/delta_twist_cmds"
 
     # ---------- 夹爪配置 ----------
     gripper_action: "/robotiq_gripper_controller/gripper_cmd"
-    gripper_open_pos: 0.08
-    gripper_close_pos: 0.0
-    gripper_force: 20.0
-    gripper_speed: 0.1
+    gripper_open_pos: 0.0
+    gripper_close_pos: 0.8
+    gripper_force: 50.0
+    gripper_speed: 0.8
+    gripper_axis_deadzone: 0.08
+    gripper_deadband: 0.01
     gripper_rate: 15.0
