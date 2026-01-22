@@ -75,7 +75,9 @@ ros2 run vr_teleop_debug vr_monitor_node
   - `planning_frame`：MoveIt/机器人基坐标系（如 `fr3_link0`）。
   - `ee_frame`：末端执行器 TF 坐标系（如 `robotiq_85_base_link`）。
   - `publish_rate`：速度指令发布频率 (Hz)。
-  - `vr_to_robot_rotation`：VR 坐标到机器人坐标的旋转 (roll, pitch, yaw, deg)。
+  - `vr_to_robot_rotation`：VR 坐标到机器人坐标的旋转 (roll, pitch, yaw, deg)，用于平移映射。
+  - `vr_to_robot_rotation_rot`：旋转专用映射 (roll, pitch, yaw, deg)。
+  - `vr_to_robot_rotation_rot_enabled`：是否启用旋转专用映射。
   - `gripper_tcp_xyz`：TCP 相对 `robotiq_85_base_link` 的平移 (m)。
   - `gripper_tcp_rpy`：TCP 相对 `robotiq_85_base_link` 的旋转 (deg)。
   - `twist_topic`：MoveIt Servo 速度指令话题。

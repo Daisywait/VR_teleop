@@ -142,7 +142,9 @@ class VRMessageConverterNode(Node):
         self.declare_parameter('planning_frame', 'fr3_link0')  # 参考坐标系
         self.declare_parameter('ee_frame', 'robotiq_85_base_link')
         self.declare_parameter('publish_rate', 50.0)      # 发布频率 Hz
-        self.declare_parameter('vr_to_robot_rotation', [0.0, 0.0, -90.0])  # rpy deg
+        self.declare_parameter('vr_to_robot_rotation', [0.0, 0.0, -90.0])  # rpy deg (平移)
+        self.declare_parameter('vr_to_robot_rotation_rot', [0.0, 0.0, 0.0])  # rpy deg (旋转)
+        self.declare_parameter('vr_to_robot_rotation_rot_enabled', False)
         self.declare_parameter('twist_topic', '/moveit_servo/delta_twist_cmds')
         self.declare_parameter('gripper_action', '/robotiq_gripper_controller/gripper_cmd')
         self.declare_parameter('gripper_open_pos', 0.0)
@@ -177,6 +179,12 @@ class VRMessageConverterNode(Node):
 
         rpy_deg = np.array(self.get_parameter('vr_to_robot_rotation').value, dtype=float)
         self.vr_to_robot_rot = _rpy_deg_to_rotmat(rpy_deg)
+        rpy_deg_rot = np.array(self.get_parameter('vr_to_robot_rotation_rot').value, dtype=float)
+        rot_enabled = bool(self.get_parameter('vr_to_robot_rotation_rot_enabled').value)
+        if rot_enabled:
+            self.vr_to_robot_rot_rot = _rpy_deg_to_rotmat(rpy_deg_rot)
+        else:
+            self.vr_to_robot_rot_rot = self.vr_to_robot_rot
 
         # ========== QoS配置 ==========
         qos_sub = QoSProfile(
@@ -336,11 +344,13 @@ class VRMessageConverterNode(Node):
 
         dp_robot = self.vr_to_robot_rot @ dvr_p
         rotvec_raw = _quat_to_rotvec_xyzw(dvr_q)
-        rotvec_robot = self.vr_to_robot_rot @ rotvec_raw
+        rotvec_robot = self.vr_to_robot_rot_rot @ rotvec_raw
         dq_robot = _rotvec_to_quat_xyzw(rotvec_robot)
 
         p_des, q_des = _pose_compose(self.ee_anchor_p, self.ee_anchor_q, dp_robot, dq_robot)
         pos_err, rotvec_err = _pose_error(ee_p, ee_q, p_des, q_des)
+        # 只保留绕末端Y轴旋转
+        rotvec_err = np.array([0.0, rotvec_err[1], 0.0], dtype=float)
 
         linear_vel = pos_err * self.linear_scale
         angular_vel = rotvec_err * self.angular_scale
