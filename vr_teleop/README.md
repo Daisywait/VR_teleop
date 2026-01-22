@@ -58,12 +58,35 @@ ros2 run vr_teleop_debug vr_monitor_node
 --------
 主要参数在 `src/vr_teleop/config/teleop_params.yaml`：
 - `vr_tracker_node.ros__parameters`：
-  - `frame_id`: `vr_room`
-  - `hmd_frame_id`: `vr_hmd_ros`
-- `franka_teleop_node.ros__parameters`：
-  - 速度缩放与限幅参数
-  - `vr_to_robot_rotation`（HMD 坐标到机器人坐标的旋转）
-  - 夹爪 action 与控制参数
+  - `update_rate`：VR 数据发布频率 (Hz)，通常 90Hz。
+  - `publish_tf`：是否发布 TF。
+  - `frame_id`：VR 原点坐标系名（如 `vr_room`）。
+  - `hmd_frame_id`：头显坐标系名（如 `vr_hmd_ros`）。
+  - `enable_right_controller`：是否启用右手控制器。
+- `vr_converter_node.ros__parameters`（`franka_teleop_node.py` 使用）：
+  - `linear_scale`：线速度缩放系数。控制器平移 -> 末端线速度的比例增益。
+  - `angular_scale`：角速度缩放系数。控制器转动 -> 末端角速度的比例增益。
+  - `v_max`：线速度上限 (m/s)。用于裁剪线速度，过大将更敏感。
+  - `w_max`：角速度上限 (rad/s)。用于裁剪角速度。
+  - `smoothing_factor`：速度低通滤波系数 (0~1)。越大越平滑但响应更慢。
+  - `deadzone_linear`：线速度死区阈值 (m)。小于该值的线速度被置零。
+  - `deadzone_angular`：角速度死区阈值 (rad)。小于该值的角速度被置零。
+  - `trigger_threshold`：扳机触发阈值。>= 该值时启用控制。
+  - `planning_frame`：MoveIt/机器人基坐标系（如 `fr3_link0`）。
+  - `ee_frame`：末端执行器 TF 坐标系（如 `robotiq_85_base_link`）。
+  - `publish_rate`：速度指令发布频率 (Hz)。
+  - `vr_to_robot_rotation`：VR 坐标到机器人坐标的旋转 (roll, pitch, yaw, deg)。
+  - `gripper_tcp_xyz`：TCP 相对 `robotiq_85_base_link` 的平移 (m)。
+  - `gripper_tcp_rpy`：TCP 相对 `robotiq_85_base_link` 的旋转 (deg)。
+  - `twist_topic`：MoveIt Servo 速度指令话题。
+  - `gripper_action`：夹爪 `GripperCommand` action 名称。
+  - `gripper_open_pos`：夹爪张开目标位置。
+  - `gripper_close_pos`：夹爪闭合目标位置。
+  - `gripper_force`：夹爪最大力。
+  - `gripper_speed`：夹爪速度（与位置增量相关）。
+  - `gripper_axis_deadzone`：摇杆死区阈值。
+  - `gripper_deadband`：夹爪位置变化小于该值时不发送新命令。
+  - `gripper_rate`：夹爪指令发送频率 (Hz)。
 
 坐标系说明
 ----------
