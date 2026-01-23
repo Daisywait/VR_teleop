@@ -61,16 +61,6 @@ def _quat_to_rotvec_xyzw(q: np.ndarray) -> np.ndarray:
     return axis * angle
 
 
-def _rpy_deg_to_rotmat(rpy_deg: np.ndarray) -> np.ndarray:
-    roll, pitch, yaw = np.deg2rad(rpy_deg)
-    cr, sr = np.cos(roll), np.sin(roll)
-    cp, sp = np.cos(pitch), np.sin(pitch)
-    cy, sy = np.cos(yaw), np.sin(yaw)
-    rx = np.array([[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]])
-    ry = np.array([[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]])
-    rz = np.array([[cy, -sy, 0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]])
-    return rz @ ry @ rx
-
 
 def _quat_to_rotmat_xyzw(q: np.ndarray) -> np.ndarray:
     x, y, z, w = q
@@ -142,9 +132,7 @@ class VRMessageConverterNode(Node):
         self.declare_parameter('planning_frame', 'fr3_link0')  # 参考坐标系
         self.declare_parameter('ee_frame', 'robotiq_85_base_link')
         self.declare_parameter('publish_rate', 50.0)      # 发布频率 Hz
-        self.declare_parameter('vr_to_robot_rotation', [0.0, 0.0, -90.0])  # rpy deg (平移)
-        self.declare_parameter('vr_to_robot_rotation_rot', [0.0, 0.0, 0.0])  # rpy deg (旋转)
-        self.declare_parameter('vr_to_robot_rotation_rot_enabled', False)
+        # 固定旋转补偿已移除，依赖TF对齐
         self.declare_parameter('twist_topic', '/moveit_servo/delta_twist_cmds')
         self.declare_parameter('gripper_action', '/robotiq_gripper_controller/gripper_cmd')
         self.declare_parameter('gripper_open_pos', 0.0)
@@ -177,14 +165,7 @@ class VRMessageConverterNode(Node):
         self.gripper_deadband = float(self.get_parameter('gripper_deadband').value)
         self.gripper_rate = float(self.get_parameter('gripper_rate').value)
 
-        rpy_deg = np.array(self.get_parameter('vr_to_robot_rotation').value, dtype=float)
-        self.vr_to_robot_rot = _rpy_deg_to_rotmat(rpy_deg)
-        rpy_deg_rot = np.array(self.get_parameter('vr_to_robot_rotation_rot').value, dtype=float)
-        rot_enabled = bool(self.get_parameter('vr_to_robot_rotation_rot_enabled').value)
-        if rot_enabled:
-            self.vr_to_robot_rot_rot = _rpy_deg_to_rotmat(rpy_deg_rot)
-        else:
-            self.vr_to_robot_rot_rot = self.vr_to_robot_rot
+        # 固定旋转补偿已移除，依赖TF对齐
 
         # ========== QoS配置 ==========
         qos_sub = QoSProfile(
@@ -342,15 +323,13 @@ class VRMessageConverterNode(Node):
         vr_anchor_pi, vr_anchor_qi = _pose_inverse(self.vr_anchor_p, self.vr_anchor_q)
         dvr_p, dvr_q = _pose_compose(vr_anchor_pi, vr_anchor_qi, vr_p_now, vr_q_now)
 
-        dp_robot = self.vr_to_robot_rot @ dvr_p
+        dp_robot = dvr_p
         rotvec_raw = _quat_to_rotvec_xyzw(dvr_q)
-        rotvec_robot = self.vr_to_robot_rot_rot @ rotvec_raw
-        dq_robot = _rotvec_to_quat_xyzw(rotvec_robot)
+        dq_robot = _rotvec_to_quat_xyzw(rotvec_raw)
 
         p_des, q_des = _pose_compose(self.ee_anchor_p, self.ee_anchor_q, dp_robot, dq_robot)
         pos_err, rotvec_err = _pose_error(ee_p, ee_q, p_des, q_des)
-        # 只保留绕末端Y轴旋转
-        rotvec_err = np.array([0.0, rotvec_err[1], 0.0], dtype=float)
+        # 保留完整旋转（不限制轴）
 
         linear_vel = pos_err * self.linear_scale
         angular_vel = rotvec_err * self.angular_scale

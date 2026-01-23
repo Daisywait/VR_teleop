@@ -31,7 +31,7 @@ vr_converter_node:
     angular_scale: 1.0
     v_max: 3.5
     w_max: 0.5
-    smoothing_factor: 0.5
+    smoothing_factor: 0.8
     deadzone_linear: 0.002
     deadzone_angular: 0.003
     trigger_threshold: 0.5
@@ -44,11 +44,7 @@ vr_converter_node:
     publish_rate: 50.0
 
     # ---------- 坐标系变换 ----------
-    # VR到机器人坐标系的旋转 (roll, pitch, yaw in degrees)
-    vr_to_robot_rotation: [0.0, 0.0, 0.0]
-    # 旋转单独映射 (roll, pitch, yaw in degrees)
-    vr_to_robot_rotation_rot: [0.0, 0.0, 0.0]
-    vr_to_robot_rotation_rot_enabled: true
+    # 固定旋转补偿已移除，依赖TF对齐
 
     # 夹爪TCP相对 base_link 的静态偏移 (xyz, rpy in meters/degrees)
     gripper_tcp_xyz: [0.0, 0.0, 0.0]
