@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 import os
 from glob import glob
 
-package_name = 'vr_teleop'
+package_name = 'vr_teleop_twist'
 
 setup(
     name=package_name,
@@ -28,8 +28,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'vr_tracker_node = vr_teleop.vr_ros2_node:main',
-            'vr_converter_node = vr_teleop.franka_teleop_node:main',
+            'vr_tracker_node = vr_teleop_twist.vr_ros2_node:main',
+            'vr_converter_node = vr_teleop_twist.franka_teleop_twist_node:main',
         ],
     },
 )
