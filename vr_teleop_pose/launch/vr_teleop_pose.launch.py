@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-VR to MoveIt Servo Launch File
-启动VR数据接收和ROS2消息转换系统
+VR to MoveIt Servo Pose Launch File
+启动VR数据接收和ROS2位姿目标转换系统
 """
 
 from launch import LaunchDescription
@@ -16,7 +16,7 @@ def generate_launch_description():
     declared_arguments = [
         DeclareLaunchArgument(
             'config_file',
-            default_value=PathJoinSubstitution(['src', 'vr_teleop', 'config', 'teleop_params.yaml']),
+            default_value=PathJoinSubstitution(['src', 'vr_teleop_pose', 'config', 'teleop_params.yaml']),
             description='Path to the configuration file'
         ),
         DeclareLaunchArgument(
@@ -37,10 +37,8 @@ def generate_launch_description():
     ])
 
     # ========== 节点定义 ==========
-
-    # VR追踪节点 - 读取SteamVR/ALVR数据并发布到ROS2
     vr_tracker_node = Node(
-        package='vr_teleop',
+        package='vr_teleop_pose',
         executable='vr_tracker_node',
         name='vr_tracker_node',
         output='screen',
@@ -50,10 +48,9 @@ def generate_launch_description():
         ]
     )
 
-    # VR消息转换节点 - 将VR数据转换为moveit_servo命令
-    vr_converter_node = Node(
-        package='vr_teleop',
-        executable='vr_converter_node',
+    vr_pose_converter_node = Node(
+        package='vr_teleop_pose',
+        executable='vr_pose_converter_node',
         name='vr_converter_node',
         output='screen',
         parameters=[
@@ -100,21 +97,17 @@ def generate_launch_description():
             )
         ]
 
-    # ========== 启动描述 ==========
     return LaunchDescription(
         declared_arguments + [
             LogInfo(msg='='*60),
-            LogInfo(msg='VR to MoveIt Servo System Starting...'),
+            LogInfo(msg='VR to MoveIt Servo Pose System Starting...'),
             LogInfo(msg='='*60),
-
-            # 启动节点组
             GroupAction([
                 vr_tracker_node,
-                vr_converter_node,
+                vr_pose_converter_node,
                 OpaqueFunction(function=_make_gripper_tcp_tf),
             ]),
-
-            LogInfo(msg='VR tracking and servo conversion nodes launched.'),
+            LogInfo(msg='VR tracking and pose conversion nodes launched.'),
             LogInfo(msg='Waiting for VR connection and MoveIt Servo...'),
         ]
     )
