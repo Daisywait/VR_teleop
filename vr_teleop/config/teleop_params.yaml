@@ -28,12 +28,12 @@ vr_converter_node:
   ros__parameters:
     # ---------- 控制参数 ----------
     linear_scale: 1.5
-    angular_scale: 1.0
+    angular_scale: 50.0
     v_max: 3.5
-    w_max: 0.5
+    w_max: 1.0
     smoothing_factor: 0.8
-    deadzone_linear: 0.002
-    deadzone_angular: 0.003
+    deadzone_linear: 0.05
+    deadzone_angular: 0.03
     trigger_threshold: 0.5
 
     # ---------- 参考坐标系 ----------
