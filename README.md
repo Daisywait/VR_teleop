@@ -70,49 +70,41 @@ B) 速度遥操参数（vr_teleop_twist，vr_converter_node.ros__parameters）
 - 遥操使用“扳机触发 + 锚点相对位姿”的逻辑，并支持夹爪控制。
 - 发布频率、缩放系数、话题名等参数请在 YAML 中调整。
 
-控制链路图（ASCII）
-------------------
+控制链路图（Mermaid）
+--------------------
 
 Twist 速度遥操链路（ROS2 本地）：
 
-VR 设备 (OpenVR/ALVR)
-  └─ vr_teleop_twist/vr_tracker_node
-       ├─ /vr/right_controller/pose_hmd
-       ├─ /vr/right_controller/trigger
-       ├─ /vr/right_controller/joystick_y
-       └─ TF: vr_room -> vr_hmd_ros -> vr_controller_right
-               │
-               ▼
-  vr_teleop_twist/vr_converter_node
-       ├─ 速度：/moveit_servo/delta_twist_cmds (TwistStamped)
-       └─ 夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)
-               │
-               ▼
-          MoveIt Servo
-               │
-               ▼
-        ROS2 控制器 / 机械臂
+```mermaid
+flowchart TD
+  A["VR 设备 (OpenVR/ALVR)"] --> B["vr_teleop_twist/vr_tracker_node"]
+  B --> B1["/vr/right_controller/pose_hmd"]
+  B --> B2["/vr/right_controller/trigger"]
+  B --> B3["/vr/right_controller/joystick_y"]
+  B --> B4["TF: vr_room -> vr_hmd_ros -> vr_controller_right"]
+  B --> C["vr_teleop_twist/vr_converter_node"]
+  C --> C1["速度：/moveit_servo/delta_twist_cmds (TwistStamped)"]
+  C --> C2["夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)"]
+  C --> D["MoveIt Servo"]
+  D --> E["ROS2 控制器 / 机械臂"]
+```
 
 Twist 速度遥操链路（UDP 转发版）：
 
-VR 设备 (OpenVR/ALVR)
-  └─ vr_teleop_twist/vr_tracker_node
-       ├─ /vr/right_controller/pose_hmd
-       ├─ /vr/right_controller/trigger
-       ├─ /vr/right_controller/joystick_y
-       └─ TF: vr_room -> vr_hmd_ros -> vr_controller_right
-               │
-               ▼
-  vr_teleop_twist/vr_converter_node
-       ├─ 速度：/moveit_servo/delta_twist_cmds (TwistStamped)
-       └─ 夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)
-               │
-               ▼
-  vr_teleop_twist/franka_teleop_twist_udp_node
-       └─ UDP：Twist + Gripper 命令 (远端)
-               │
-               ▼
-      远端 ROS2 接收/控制器 / 机械臂
+```mermaid
+flowchart TD
+  A["VR 设备 (OpenVR/ALVR)"] --> B["vr_teleop_twist/vr_tracker_node"]
+  B --> B1["/vr/right_controller/pose_hmd"]
+  B --> B2["/vr/right_controller/trigger"]
+  B --> B3["/vr/right_controller/joystick_y"]
+  B --> B4["TF: vr_room -> vr_hmd_ros -> vr_controller_right"]
+  B --> C["vr_teleop_twist/vr_converter_node"]
+  C --> C1["速度：/moveit_servo/delta_twist_cmds (TwistStamped)"]
+  C --> C2["夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)"]
+  C --> U["vr_teleop_twist/franka_teleop_twist_udp_node"]
+  U --> U1["UDP：Twist + Gripper 命令 (远端)"]
+  U1 --> R["远端 ROS2 接收/控制器 / 机械臂"]
+```
 
 话题 + 节点表格
 --------------
