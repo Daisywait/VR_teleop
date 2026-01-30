@@ -30,6 +30,7 @@ setup(
         'console_scripts': [
             'vr_tracker_node = vr_teleop_twist.vr_ros2_node:main',
             'vr_converter_node = vr_teleop_twist.franka_teleop_twist_node:main',
+            'franka_teleop_twist_udp_node = vr_teleop_twist.franka_teleop_twist_udp_node:main',
         ],
     },
 )
