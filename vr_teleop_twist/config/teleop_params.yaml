@@ -62,3 +62,11 @@ vr_converter_node:
     gripper_axis_deadzone: 0.08
     gripper_deadband: 0.01
     gripper_rate: 15.0
+
+    # ---------- UDP (libfranka 实时环) ----------
+    # 发送速度命令到 asus
+    udp_cmd_ip: "10.0.0.1"
+    udp_cmd_port: 5005
+    # 接收末端位姿（O_T_EE）
+    udp_pose_bind: "0.0.0.0"
+    udp_pose_port: 5006

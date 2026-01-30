@@ -20,6 +20,7 @@ VR_debug 工作区
      - 发布：TwistStamped 到 /moveit_servo/delta_twist_cmds（可配置）
    - 启动：
      - ros2 launch vr_teleop_twist vr_teleop.launch.py
+     - UDP 版：ros2 launch vr_teleop_twist vr_teleop_udp.launch.py
    - 配置：
      - vr_teleop_twist/config/teleop_params.yaml
 
@@ -72,17 +73,18 @@ B) 速度遥操参数（vr_teleop_twist，vr_converter_node.ros__parameters）
 控制链路图（ASCII）
 ------------------
 
-Twist 速度遥操链路：
+Twist 速度遥操链路（ROS2 本地）：
 
-VR 设备
+VR 设备 (OpenVR/ALVR)
   └─ vr_teleop_twist/vr_tracker_node
        ├─ /vr/right_controller/pose_hmd
        ├─ /vr/right_controller/trigger
-       └─ /vr/right_controller/joystick_y
+       ├─ /vr/right_controller/joystick_y
+       └─ TF: vr_room -> vr_hmd_ros -> vr_controller_right
                │
                ▼
   vr_teleop_twist/vr_converter_node
-       ├─ 输出：/moveit_servo/delta_twist_cmds (TwistStamped)
+       ├─ 速度：/moveit_servo/delta_twist_cmds (TwistStamped)
        └─ 夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)
                │
                ▼
@@ -90,6 +92,27 @@ VR 设备
                │
                ▼
         ROS2 控制器 / 机械臂
+
+Twist 速度遥操链路（UDP 转发版）：
+
+VR 设备 (OpenVR/ALVR)
+  └─ vr_teleop_twist/vr_tracker_node
+       ├─ /vr/right_controller/pose_hmd
+       ├─ /vr/right_controller/trigger
+       ├─ /vr/right_controller/joystick_y
+       └─ TF: vr_room -> vr_hmd_ros -> vr_controller_right
+               │
+               ▼
+  vr_teleop_twist/vr_converter_node
+       ├─ 速度：/moveit_servo/delta_twist_cmds (TwistStamped)
+       └─ 夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)
+               │
+               ▼
+  vr_teleop_twist/franka_teleop_twist_udp_node
+       └─ UDP：Twist + Gripper 命令 (远端)
+               │
+               ▼
+      远端 ROS2 接收/控制器 / 机械臂
 
 话题 + 节点表格
 --------------
