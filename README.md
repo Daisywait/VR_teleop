@@ -83,10 +83,9 @@ flowchart TD
   B --> B3["/vr/right_controller/joystick_y"]
   B --> B4["TF: vr_room -> vr_hmd_ros -> vr_controller_right"]
   B --> C["vr_teleop_twist/vr_converter_node"]
-  C --> C1["速度：/moveit_servo/delta_twist_cmds (TwistStamped)"]
-  C --> C2["夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)"]
-  C --> D["MoveIt Servo"]
-  D --> E["ROS2 控制器 / 机械臂"]
+  C -->|"/moveit_servo/delta_twist_cmds (TwistStamped)"| D["MoveIt Servo"]
+  C -->|"/robotiq_gripper_controller/gripper_cmd (GripperCommand)"| E["ROS2 夹爪控制器"]
+  D --> F["ROS2 控制器 / 机械臂"]
 ```
 
 Twist 速度遥操链路（UDP 转发版）：
@@ -99,11 +98,9 @@ flowchart TD
   B --> B3["/vr/right_controller/joystick_y"]
   B --> B4["TF: vr_room -> vr_hmd_ros -> vr_controller_right"]
   B --> C["vr_teleop_twist/vr_converter_node"]
-  C --> C1["速度：/moveit_servo/delta_twist_cmds (TwistStamped)"]
-  C --> C2["夹爪：/robotiq_gripper_controller/gripper_cmd (GripperCommand)"]
   C --> U["vr_teleop_twist/franka_teleop_twist_udp_node"]
-  U --> U1["UDP：Twist + Gripper 命令 (远端)"]
-  U1 --> R["远端 ROS2 接收/控制器 / 机械臂"]
+  U -->|UDP: Twist| U1["远端 ROS2 接收/控制器 / 机械臂"]
+  U -->|ROS2 Action: /robotiq_gripper_controller/gripper_cmd| G["ROS2 夹爪控制器"]
 ```
 
 话题 + 节点表格
