@@ -12,4 +12,10 @@ VR_Teleop 工作区
   - vr_teleop_twist/README.md
   - vr_teleop_debug/README.md
 - 启动（vr_teleop_twist）：
-  - ros2 launch vr_teleop_twist vr_teleop.launch.py
+  ```
+  ros2 launch vr_teleop_twist vr_teleop.launch.py
+  ```
+- 启动（vr_teleop_debug）：
+  ```
+  ros2 launch vr_teleop_debug vr_teleop_debug.launch.py
+  ```
