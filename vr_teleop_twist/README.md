@@ -24,23 +24,6 @@ flowchart TD
   H --> H1["机械臂 (FCI)"]
 ```
 
-Twist 速度遥操链路（UDP 转发版）：
-
-```mermaid
-flowchart TD
-  A["VR 设备 (OpenVR/ALVR)"] --> B["vr_tracker_node"]
-  B -->|"/vr/right_controller/pose_hmd"| C["vr_converter_node"]
-  B -->|"/vr/right_controller/trigger"| C
-  B -->|"/vr/right_controller/joystick_y"| C
-  B -->|"TF: vr_room -> vr_hmd_ros -> vr_controller_right"| C
-  C --> U["franka_teleop_twist_udp_node"]
-  U -->|"UDP: Twist"| U1["远端 ROS2 接收/MoveIt Servo"]
-  U1 -->|"/fr3_arm_controller/joint_trajectory (JointTrajectory)"| U2["fr3_arm_controller (ROS2 控制器)"]
-  U2 --> U3["硬件接口/FCI"]
-  U3 --> U4["机械臂 (FCI)"]
-  U -->|"/robotiq_gripper_controller/gripper_cmd (control_msgs/action/GripperCommand)"| G["robotiq_gripper_controller (ROS2 控制器)"]
-  G --> G1["夹爪执行器"]
-```
 节点说明
 --------
 
