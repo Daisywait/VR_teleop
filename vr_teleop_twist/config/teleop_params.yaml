@@ -27,9 +27,9 @@ vr_tracker_node:
 vr_converter_node:
   ros__parameters:
     # ---------- 控制参数 ----------
-    linear_scale: 1.5
+    linear_scale: 1.0
     angular_scale: 1.0
-    v_max: 3.5
+    v_max: 1.0
     w_max: 1.0
     smoothing_factor: 0.8
     deadzone_linear: 0.05
@@ -62,11 +62,3 @@ vr_converter_node:
     gripper_axis_deadzone: 0.08
     gripper_deadband: 0.01
     gripper_rate: 15.0
-
-    # ---------- UDP (libfranka 实时环) ----------
-    # 发送速度命令到 asus
-    udp_cmd_ip: "10.0.0.1"
-    udp_cmd_port: 5005
-    # 接收末端位姿（O_T_EE）
-    udp_pose_bind: "0.0.0.0"
-    udp_pose_port: 5006
