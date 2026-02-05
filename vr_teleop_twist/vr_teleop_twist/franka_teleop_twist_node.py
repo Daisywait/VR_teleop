@@ -19,7 +19,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
 from std_msgs.msg import Float32
 from control_msgs.action import GripperCommand
-from std_srvs.srv import Trigger
+from moveit_msgs.srv import ServoCommandType
 import tf2_ros
 from tf2_ros import TransformException
 import numpy as np
@@ -142,6 +142,8 @@ class VRMessageConverterNode(Node):
         self.declare_parameter('gripper_axis_deadzone', 0.08)
         self.declare_parameter('gripper_deadband', 0.01)
         self.declare_parameter('gripper_rate', 15.0)
+        self.declare_parameter('servo_command_type_service', '/servo_node/switch_command_type')
+        self.declare_parameter('servo_command_type', 1)
 
         # ========== 获取参数 ==========
         self.linear_scale = float(self.get_parameter('linear_scale').value)
@@ -164,6 +166,10 @@ class VRMessageConverterNode(Node):
         self.gripper_axis_deadzone = float(self.get_parameter('gripper_axis_deadzone').value)
         self.gripper_deadband = float(self.get_parameter('gripper_deadband').value)
         self.gripper_rate = float(self.get_parameter('gripper_rate').value)
+        self.servo_command_type_service = str(
+            self.get_parameter('servo_command_type_service').value
+        )
+        self.servo_command_type = int(self.get_parameter('servo_command_type').value)
 
         # 固定旋转补偿已移除，依赖TF对齐
 
@@ -204,9 +210,14 @@ class VRMessageConverterNode(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Servo 激活客户端
-        self.servo_start_client = self.create_client(Trigger, '/moveit_servo/start_servo')
-        self.servo_start_timer = self.create_timer(1.0, self.try_activate_servo)
+        # Servo command type client
+        self.servo_command_type_client = self.create_client(
+            ServoCommandType,
+            self.servo_command_type_service,
+        )
+        self.servo_command_type_set = False
+        self.servo_command_type_pending = False
+        self.servo_command_type_timer = self.create_timer(1.0, self.try_set_command_type)
 
         # ========== 状态变量 ==========
         self.current_controller_pose: Optional[PoseStamped] = None
@@ -240,11 +251,33 @@ class VRMessageConverterNode(Node):
         self.get_logger().info('='*60)
         self.get_logger().info('Waiting for VR controller data...')
 
-    def try_activate_servo(self) -> None:
-        """尝试启动 MoveIt Servo（避免未激活导致无动作）"""
-        if self.servo_start_client.wait_for_service(timeout_sec=0.1):
-            self.servo_start_client.call_async(Trigger.Request())
-            self.servo_start_timer.cancel()
+    def try_set_command_type(self) -> None:
+        """尝试设置 MoveIt Servo 命令类型（Twist/Speed Units）"""
+        if self.servo_command_type_set or self.servo_command_type_pending:
+            return
+        if not self.servo_command_type_client.wait_for_service(timeout_sec=0.1):
+            return
+        req = ServoCommandType.Request()
+        req.command_type = int(self.servo_command_type)
+        future = self.servo_command_type_client.call_async(req)
+        self.servo_command_type_pending = True
+        future.add_done_callback(self._on_servo_command_type_response)
+
+    def _on_servo_command_type_response(self, future) -> None:
+        self.servo_command_type_pending = False
+        try:
+            resp = future.result()
+        except Exception as exc:
+            self.get_logger().warn(f'Failed to set servo command type: {exc}')
+            return
+        if hasattr(resp, 'success') and not resp.success:
+            self.get_logger().warn(
+                f'Failed to set servo command type: {getattr(resp, "message", "")}'
+            )
+            return
+        self.servo_command_type_set = True
+        self.servo_command_type_timer.cancel()
+
 
     def _controller_pose_callback(self, msg: PoseStamped) -> None:
         """接收VR控制器相对头显位姿"""

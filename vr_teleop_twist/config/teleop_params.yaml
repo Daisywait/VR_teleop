@@ -29,11 +29,11 @@ vr_converter_node:
     # ---------- 控制参数 ----------
     linear_scale: 1.0
     angular_scale: 1.0
-    v_max: 1.0
-    w_max: 1.0
-    smoothing_factor: 0.8
-    deadzone_linear: 0.05
-    deadzone_angular: 0.03
+    v_max: 1.3
+    w_max: 1.3
+    smoothing_factor: 0.9
+    deadzone_linear: 0.1
+    deadzone_angular: 0.1
     trigger_threshold: 0.5
 
     # ---------- 参考坐标系 ----------
@@ -53,12 +53,16 @@ vr_converter_node:
     # ---------- Servo话题 ----------
     twist_topic: "/moveit_servo/delta_twist_cmds"
 
+    # ---------- Servo服务 ----------
+    servo_command_type_service: "/servo_node/switch_command_type"
+    servo_command_type: 1
+
     # ---------- 夹爪配置 ----------
     gripper_action: "/robotiq_gripper_controller/gripper_cmd"
     gripper_open_pos: 0.0
     gripper_close_pos: 0.8
-    gripper_force: 50.0
-    gripper_speed: 0.8
+    gripper_force: 40.0
+    gripper_speed: 0.4
     gripper_axis_deadzone: 0.08
     gripper_deadband: 0.01
     gripper_rate: 15.0
