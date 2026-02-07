@@ -24,11 +24,6 @@ def generate_launch_description():
             default_value='90.0',
             description='VR tracking update rate (Hz)'
         ),
-        DeclareLaunchArgument(
-            'publish_rate',
-            default_value='50.0',
-            description='Command publish rate for moveit_servo (Hz)'
-        ),
     ]
 
     # ========== 配置文件路径 ==========
@@ -56,12 +51,7 @@ def generate_launch_description():
         executable='vr_converter_node',
         name='vr_converter_node',
         output='screen',
-        parameters=[
-            config_file_path,
-            {
-                'publish_rate': LaunchConfiguration('publish_rate')
-            }
-        ]
+        parameters=[config_file_path]
     )
 
     def _make_gripper_tcp_tf(context):

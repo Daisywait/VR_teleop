@@ -7,6 +7,8 @@ VR ROS2 Node
 - /vr/right_controller/pose_hmd (geometry_msgs/PoseStamped)
 - /vr/right_controller/trigger (std_msgs/Float32)
 - /vr/right_controller/joystick_y (std_msgs/Float32)
+- /vr/right_controller/a_button (std_msgs/Bool)
+- /vr/right_controller/grip_button (std_msgs/Bool)
 - TF: vr_room -> vr_hmd_ros -> vr_controller_right
 """
 
@@ -14,7 +16,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from geometry_msgs.msg import PoseStamped, TransformStamped
-from std_msgs.msg import Float32
+from std_msgs.msg import Float32, Bool
 from tf2_ros import TransformBroadcaster
 import numpy as np
 import openvr
@@ -148,6 +150,10 @@ class VRRos2Node(Node):
                 Float32, '/vr/right_controller/trigger', qos_profile)
             self.right_joystick_y_pub = self.create_publisher(
                 Float32, '/vr/right_controller/joystick_y', qos_profile)
+            self.right_a_button_pub = self.create_publisher(
+                Bool, '/vr/right_controller/a_button', qos_profile)
+            self.right_grip_button_pub = self.create_publisher(
+                Bool, '/vr/right_controller/grip_button', qos_profile)
 
         # TF广播器
         if self.publish_tf:
@@ -469,6 +475,14 @@ class VRRos2Node(Node):
             joystick_msg = Float32()
             joystick_msg.data = data.state.joystick_y
             self.right_joystick_y_pub.publish(joystick_msg)
+
+            a_msg = Bool()
+            a_msg.data = bool(data.state.a_pressed)
+            self.right_a_button_pub.publish(a_msg)
+
+            grip_msg = Bool()
+            grip_msg.data = bool(data.state.grip_pressed)
+            self.right_grip_button_pub.publish(grip_msg)
 
             if self.haptic_on_trigger:
                 self._maybe_trigger_haptic(data.state.trigger_pressed, hand)
