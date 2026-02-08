@@ -14,6 +14,7 @@ flowchart TD
   B -->|"/vr/right_controller/pose_hmd"| C["vr_converter_node"]
   B -->|"/vr/right_controller/trigger"| C
   B -->|"/vr/right_controller/joystick_y"| C
+  B -->|"/vr/right_controller/grip_button"| C
   B -->|"TF: vr_room -> vr_hmd_ros -> vr_controller_right"| C
   C -->|"/moveit_servo/delta_twist_cmds (TwistStamped)"| D["MoveIt Servo"]
   D -->|"/fr3_arm_controller/joint_trajectory (JointTrajectory)"| F["fr3_arm_controller (ROS2 控制器)"]
@@ -42,8 +43,8 @@ flowchart TD
 
 节点 | 所属包 | 订阅 | 发布 | 说明
 ----|--------|------|------|-----
-vr_tracker_node | vr_teleop_twist | (无) | /vr/right_controller/pose_hmd<br>/vr/right_controller/trigger<br>/vr/right_controller/joystick_y<br>TF: vr_room -> vr_hmd_ros -> vr_controller_right | 读取 OpenVR/ALVR 并发布 VR 数据与 TF
-vr_converter_node | vr_teleop_twist | /vr/right_controller/pose_hmd<br>/vr/right_controller/trigger<br>/vr/right_controller/joystick_y | /moveit_servo/delta_twist_cmds (TwistStamped)<br>/robotiq_gripper_controller/gripper_cmd (control_msgs/action/GripperCommand) | 速度遥操（扳机触发 + 锚点相对位姿）
+vr_tracker_node | vr_teleop_twist | (无) | /vr/right_controller/pose_hmd<br>/vr/right_controller/trigger<br>/vr/right_controller/joystick_y<br>/vr/right_controller/a_button<br>/vr/right_controller/grip_button<br>TF: vr_room -> vr_hmd_ros -> vr_controller_right | 读取 OpenVR/ALVR 并发布 VR 数据与 TF
+vr_converter_node | vr_teleop_twist | /vr/right_controller/pose_hmd<br>/vr/right_controller/trigger<br>/vr/right_controller/joystick_y<br>/vr/right_controller/grip_button | /moveit_servo/delta_twist_cmds (TwistStamped)<br>/robotiq_gripper_controller/gripper_cmd (control_msgs/action/GripperCommand) | 速度遥操（扳机触发 + 锚点相对位姿）
 moveit_servo | MoveIt Servo | /moveit_servo/delta_twist_cmds | 控制器输出话题 | 将 Twist 转换为关节控制指令
 fr3_arm_controller | ros2_control | /fr3_arm_controller/joint_trajectory (JointTrajectory) | (ros2_control 内部接口) | ROS2 控制器（JointTrajectoryController）
 robotiq_gripper_controller | ros2_control | /robotiq_gripper_controller/gripper_cmd (control_msgs/action/GripperCommand) | (ros2_control 内部接口) | ROS2 夹爪控制器（joint: robotiq_85_left_knuckle_joint）
@@ -66,6 +67,9 @@ A) VR 追踪参数（vr_tracker_node.ros__parameters）
 - frame_id：VR 原点坐标系名（如 vr_room）。
 - hmd_frame_id：头显坐标系名（如 vr_hmd_ros）。
 - enable_right_controller：是否启用右手控制器。
+- haptic_on_trigger：扳机按下时是否触发震动。
+- haptic_duration_us：震动时长 (us)，OpenVR 上限 3999。
+- reinit_interval：初始化失败后的重试间隔 (s)。
 
 B) 速度遥操参数（vr_converter_node.ros__parameters）
 - linear_scale：线速度缩放系数。
@@ -95,3 +99,18 @@ B) 速度遥操参数（vr_converter_node.ros__parameters）
 ----
 - 遥操使用“扳机触发 + 锚点相对位姿”的逻辑，并支持夹爪控制。
 - 发布频率、缩放系数、话题名等参数请在 YAML 中调整。
+
+增量模式（不使用锚点）
+--------------------
+当 `use_anchor: false` 时，不建立 VR/末端“锚点”。速度由**上一帧与当前帧的控制器相对位姿增量**计算得到，流程如下：
+
+1) 读取当前帧控制器相对头显位姿 `vr_p_now, vr_q_now`。
+2) 若是首次帧（`last_vr_p/q` 为空），仅缓存当前帧并输出零速度。
+3) 计算上一帧到当前帧的增量位姿：
+   - `dvr_p, dvr_q = pose_inverse(last) ∘ pose_compose(now)`
+   - 将 `dvr_p/dt` 与 `rotvec(dvr_q)/dt` 转换为线速度和角速度。
+4) 叠加 `linear_scale/angular_scale` 与 `z_scale`，再做死区、限速、滤波与门控。
+
+启动与停用细节：
+- 当扳机使能时会进入 `startup_active`，在 `soft_stop_duration` 时间内输出零速度，用于“对齐上一帧缓存”；之后开始按增量计算速度。
+- 当扳机松开或未使能时，会清空 `last_vr_p/q`，下一次启用再次从“首帧零速度”开始。
