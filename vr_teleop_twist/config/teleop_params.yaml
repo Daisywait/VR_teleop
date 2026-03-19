@@ -27,8 +27,8 @@ vr_tracker_node:
 vr_converter_node:
   ros__parameters:
     # ---------- 控制参数 ----------
-    linear_scale: 3.0
-    angular_scale: 3.0
+    linear_scale: 4.7
+    angular_scale: 4.7
     smoothing_factor: 0.8
     deadzone_linear: 0.25
     deadzone_angular: 0.1
@@ -46,8 +46,8 @@ vr_converter_node:
     gating_w_min_ratio: 0.25
     # ---------- 速度档位 ----------
     # 未显式配置时，fast/slow 默认与 v_max/w_max/linear_slew_rate/angular_slew_rate 相同
-    v_max_fast: 1.5
-    w_max_fast: 1.5
+    v_max_fast: 1.7
+    w_max_fast: 1.7
     linear_slew_rate_fast: 0.4
     angular_slew_rate_fast: 0.8
     v_max_slow: 0.5
