@@ -1,51 +1,36 @@
 # VR Teleop Configuration
-# 配置文件 for Franka FR3 + HTC Vive Focus Vision
+# Franka FR3 + HTC Vive Focus Vision
 
-# ============================================================
-# VR Tracker Node 配置
-# ============================================================
 vr_tracker_node:
   ros__parameters:
-    # 更新频率 (Hz) - SteamVR通常支持90Hz
     update_rate: 90.0
-
-    # 是否发布TF变换
     publish_tf: true
-
-    # VR原点坐标系名称
     frame_id: "vr_room"
-
-    # HMD坐标系名称（相对位姿的参考坐标）
     hmd_frame_id: "vr_hmd_ros"
-
-    # 启用右手控制器
     enable_right_controller: true
+    haptic_on_trigger: true
+    haptic_duration_us: 3000
+    reinit_interval: 5.0
 
-# ============================================================
-# Franka Teleop Node 配置
-# ============================================================
 vr_converter_node:
   ros__parameters:
-    # ---------- 控制参数 ----------
+    # 运动缩放
     linear_scale: 4.7
     angular_scale: 4.7
+    z_scale: 0.7
+
+    # 平滑与死区
     smoothing_factor: 0.8
     deadzone_linear: 0.25
     deadzone_angular: 0.1
+
+    # 使能门限
     enable_threshold: 0.6
     disable_threshold: 0.4
-    enable_settle_time: 0.4
     use_anchor: false
-    z_scale: 0.7
     soft_stop_duration: 0.2
-    # ---------- 连续门控 ----------
-    enable_gating: true
-    gating_bind_to_speed_mode: true
-    gating_tau: 0.2
-    gating_v_min_ratio: 0.25
-    gating_w_min_ratio: 0.25
-    # ---------- 速度档位 ----------
-    # 未显式配置时，fast/slow 默认与 v_max/w_max/linear_slew_rate/angular_slew_rate 相同
+
+    # 速度档位 (grip键切换)
     v_max_fast: 1.7
     w_max_fast: 1.7
     linear_slew_rate_fast: 0.4
@@ -56,28 +41,24 @@ vr_converter_node:
     angular_slew_rate_slow: 0.4
     speed_mode_transition_time: 0.3
 
-    # ---------- 参考坐标系 ----------
+    # 连续门控
+    enable_gating: true
+    gating_bind_to_speed_mode: true
+    gating_tau: 0.2
+    gating_v_min_ratio: 0.25
+    gating_w_min_ratio: 0.25
+
+    # 坐标系
     planning_frame: "fr3_link0"
     ee_frame: "robotiq_85_tcp"
-
-    # ---------- 发布频率 ----------
     publish_rate: 90.0
 
-    # ---------- 坐标系变换 ----------
-    # 固定旋转补偿已移除，依赖TF对齐
-
-    # 夹爪TCP相对 base_link 的静态偏移 (xyz, rpy in meters/degrees)
-    gripper_tcp_xyz: [0.0, 0.0, 0.0]
-    gripper_tcp_rpy: [0.0, 0.0, 0.0]
-
-    # ---------- Servo话题 ----------
+    # Servo
     twist_topic: "/moveit_servo/delta_twist_cmds"
-
-    # ---------- Servo服务 ----------
     servo_command_type_service: "/servo_node/switch_command_type"
     servo_command_type: 1
 
-    # ---------- 夹爪配置 ----------
+    # 夹爪
     gripper_action: "/robotiq_gripper_controller/gripper_cmd"
     gripper_open_pos: 0.0
     gripper_close_pos: 0.8
