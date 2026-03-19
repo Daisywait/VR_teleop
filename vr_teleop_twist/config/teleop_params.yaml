@@ -15,9 +15,9 @@ vr_tracker_node:
 vr_converter_node:
   ros__parameters:
     # 运动缩放
-    linear_scale: 4.7
-    angular_scale: 4.7
-    z_scale: 0.7
+    linear_scale: 6.5
+    angular_scale: 6.5
+    z_scale: 1.0
 
     # 平滑与死区
     smoothing_factor: 0.8
@@ -31,8 +31,8 @@ vr_converter_node:
     soft_stop_duration: 0.2
 
     # 速度档位 (grip键切换)
-    v_max_fast: 1.7
-    w_max_fast: 1.7
+    v_max_fast: 2.0
+    w_max_fast: 2.0
     linear_slew_rate_fast: 0.4
     angular_slew_rate_fast: 0.8
     v_max_slow: 0.5
